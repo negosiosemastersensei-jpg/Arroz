@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Chart Converter Kade → Psych</title>
+<title>Kade → Psych Converter PRO</title>
 <style>
 body {
     background: #111;
@@ -10,13 +10,9 @@ body {
     font-family: Arial;
     text-align: center;
 }
-textarea {
-    width: 90%;
-    height: 200px;
-    margin: 10px;
-}
 button {
     padding: 10px 20px;
+    margin: 10px;
     font-size: 16px;
 }
 </style>
@@ -26,56 +22,98 @@ button {
 
 <h1>🔥 Kade → Psych Converter 🔥</h1>
 
-<p>Pegá tu JSON de Kade:</p>
-<textarea id="input"></textarea>
+<input type="file" id="fileInput" accept=".json">
+
+<br>
 
 <button onclick="convert()">Convertir</button>
+<button onclick="download()">Descargar JSON</button>
 
-<p>Resultado (Psych):</p>
-<textarea id="output"></textarea>
+<p id="status"></p>
 
 <script>
+let convertedData = null;
+
 function convert() {
-    try {
-        let input = JSON.parse(document.getElementById("input").value);
+    const file = document.getElementById('fileInput').files[0];
 
-        let psych = {
-            song: {
-                song: input.song,
-                bpm: input.bpm,
-                speed: input.speed || 1,
-                notes: [],
-                events: [],
-                needsVoices: true,
-                player1: input.player1 || "bf",
-                player2: input.player2 || "dad"
-            }
-        };
+    if (!file) {
+        alert("Seleccioná un archivo primero bro 😤");
+        return;
+    }
 
-        for (let section of input.notes) {
-            let newSection = {
-                lengthInSteps: section.lengthInSteps,
-                mustHitSection: section.mustHitSection,
-                sectionNotes: []
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        try {
+            let data = JSON.parse(e.target.result);
+            let songData = data.song ? data.song : data;
+
+            let psych = {
+                song: {
+                    song: songData.song || "unknown",
+                    bpm: songData.bpm || 120,
+                    speed: songData.speed || 1,
+                    notes: [],
+                    events: [],
+                    needsVoices: true,
+                    player1: songData.player1 || "bf",
+                    player2: songData.player2 || "dad"
+                }
             };
 
-            for (let note of section.sectionNotes) {
-                newSection.sectionNotes.push([
-                    note[0], // tiempo
-                    note[1], // dirección
-                    note[2], // sustain
-                    0        // tipo de nota
-                ]);
+            if (!songData.notes) {
+                document.getElementById("status").innerText = "❌ JSON inválido";
+                return;
             }
 
-            psych.song.notes.push(newSection);
+            for (let section of songData.notes) {
+                let newSection = {
+                    lengthInSteps: section.lengthInSteps || 16,
+                    mustHitSection: section.mustHitSection || false,
+                    sectionNotes: []
+                };
+
+                if (section.sectionNotes) {
+                    for (let note of section.sectionNotes) {
+                        newSection.sectionNotes.push([
+                            note[0],
+                            note[1],
+                            note[2] || 0,
+                            0
+                        ]);
+                    }
+                }
+
+                psych.song.notes.push(newSection);
+            }
+
+            convertedData = JSON.stringify(psych, null, 2);
+            document.getElementById("status").innerText = "✅ Convertido con éxito";
+
+        } catch (err) {
+            document.getElementById("status").innerText = "💀 Error leyendo el archivo";
         }
+    };
 
-        document.getElementById("output").value = JSON.stringify(psych, null, 2);
+    reader.readAsText(file);
+}
 
-    } catch (e) {
-        alert("Error en el JSON bro 💀");
+function download() {
+    if (!convertedData) {
+        alert("Primero convertí algo bro 😤");
+        return;
     }
+
+    const blob = new Blob([convertedData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "psych-chart.json";
+    a.click();
+
+    URL.revokeObjectURL(url);
 }
 </script>
 
