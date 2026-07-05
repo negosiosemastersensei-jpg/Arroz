@@ -1,121 +1,62 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Kade → Psych Converter PRO</title>
-<style>
-body {
-    background: #111;
-    color: white;
-    font-family: Arial;
-    text-align: center;
-}
-button {
-    padding: 10px 20px;
-    margin: 10px;
-    font-size: 16px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FNF Sprite XML Generator</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #222; color: white; }
+        canvas { border: 1px solid #fff; max-width: 100%; height: auto; display: block; margin: 10px 0; }
+        .controls { display: flex; flex-direction: column; gap: 10px; }
+    </style>
 </head>
-
 <body>
+    <h2>Generador XML para FNF</h2>
+    <input type="file" id="fileInput" multiple accept="image/*">
+    <div class="controls">
+        <label>Nombre de la animación: <input type="text" id="animName" value="idle"></label>
+        <button onclick="generar()">Procesar y Exportar XML</button>
+    </div>
+    <canvas id="canvas"></canvas>
+    <a id="downloadLink" style="display:none">Descargar XML</a>
 
-<h1>🔥 Kade → Psych Converter 🔥</h1>
+    <script>
+        async function generar() {
+            const files = Array.from(document.getElementById('fileInput').files).sort();
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const animName = document.getElementById('animName').value;
+            
+            let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<TextureAtlas imagePath="sprites.png">\n';
+            let x = 0, y = 0, maxHeight = 0;
+            const images = [];
 
-<input type="file" id="fileInput" accept=".json">
-
-<br>
-
-<button onclick="convert()">Convertir</button>
-<button onclick="download()">Descargar JSON</button>
-
-<p id="status"></p>
-
-<script>
-let convertedData = null;
-
-function convert() {
-    const file = document.getElementById('fileInput').files[0];
-
-    if (!file) {
-        alert("Seleccioná un archivo primero bro 😤");
-        return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = function(e) {
-        try {
-            let data = JSON.parse(e.target.result);
-            let songData = data.song ? data.song : data;
-
-            let psych = {
-                song: {
-                    song: songData.song || "unknown",
-                    bpm: songData.bpm || 120,
-                    speed: songData.speed || 1,
-                    notes: [],
-                    events: [],
-                    needsVoices: true,
-                    player1: songData.player1 || "bf",
-                    player2: songData.player2 || "dad"
-                }
-            };
-
-            if (!songData.notes) {
-                document.getElementById("status").innerText = "❌ JSON inválido";
-                return;
+            // Cargar imágenes
+            for (let file of files) {
+                const img = await createImageBitmap(file);
+                images.push({img, name: file.name.split('.')[0]});
             }
 
-            for (let section of songData.notes) {
-                let newSection = {
-                    lengthInSteps: section.lengthInSteps || 16,
-                    mustHitSection: section.mustHitSection || false,
-                    sectionNotes: []
-                };
-
-                if (section.sectionNotes) {
-                    for (let note of section.sectionNotes) {
-                        newSection.sectionNotes.push([
-                            note[0],
-                            note[1],
-                            note[2] || 0,
-                            0
-                        ]);
-                    }
-                }
-
-                psych.song.notes.push(newSection);
+            // Calcular layout simple (fila)
+            canvas.width = 2048; // Ancho máximo seguro
+            canvas.height = 2048; 
+            
+            for (let item of images) {
+                ctx.drawImage(item.img, x, y);
+                xmlContent += `\t<SubTexture name="${item.name}0000" x="${x}" y="${y}" width="${item.img.width}" height="${item.img.height}"/>\n`;
+                x += item.img.width;
+                maxHeight = Math.max(maxHeight, item.img.height);
             }
+            xmlContent += '</TextureAtlas>';
 
-            convertedData = JSON.stringify(psych, null, 2);
-            document.getElementById("status").innerText = "✅ Convertido con éxito";
-
-        } catch (err) {
-            document.getElementById("status").innerText = "💀 Error leyendo el archivo";
+            // Descarga
+            const blob = new Blob([xmlContent], {type: 'text/xml'});
+            const link = document.getElementById('downloadLink');
+            link.href = URL.createObjectURL(blob);
+            link.download = animName + ".xml";
+            link.style.display = 'block';
+            link.innerText = "¡XML Generado! Click aquí para descargar";
         }
-    };
-
-    reader.readAsText(file);
-}
-
-function download() {
-    if (!convertedData) {
-        alert("Primero convertí algo bro 😤");
-        return;
-    }
-
-    const blob = new Blob([convertedData], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "psych-chart.json";
-    a.click();
-
-    URL.revokeObjectURL(url);
-}
-</script>
-
+    </script>
 </body>
 </html>
