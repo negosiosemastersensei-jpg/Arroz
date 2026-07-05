@@ -2,60 +2,199 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FNF Sprite XML Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FNF XML Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #222; color: white; }
-        canvas { border: 1px solid #fff; max-width: 100%; height: auto; display: block; margin: 10px 0; }
-        .controls { display: flex; flex-direction: column; gap: 10px; }
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        body { font-family: 'Press Start 2P', system-ui; }
+        .pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
+        .frame { transition: all 0.15s; }
+        .frame.selected { border-color: #ff00ff; background: #3b0764; }
     </style>
 </head>
-<body>
-    <h2>Generador XML para FNF</h2>
-    <input type="file" id="fileInput" multiple accept="image/*">
-    <div class="controls">
-        <label>Nombre de la animación: <input type="text" id="animName" value="idle"></label>
-        <button onclick="generar()">Procesar y Exportar XML</button>
+<body class="bg-zinc-950 text-white min-h-screen">
+    <div class="max-w-2xl mx-auto p-4">
+
+        <h1 class="text-3xl font-bold text-center text-pink-500 mb-6">FNF XML</h1>
+
+        <!-- Upload + Grid -->
+        <div class="bg-zinc-900 rounded-3xl p-5 mb-6">
+            <input type="file" id="upload" accept="image/*" class="w-full p-5 bg-zinc-800 rounded-2xl mb-5">
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-zinc-400">COLUMNAS</label>
+                    <input id="cols" type="number" value="4" class="w-full p-5 bg-zinc-800 rounded-2xl text-center text-2xl">
+                </div>
+                <div>
+                    <label class="text-xs text-zinc-400">FILAS</label>
+                    <input id="rows" type="number" value="8" class="w-full p-5 bg-zinc-800 rounded-2xl text-center text-2xl">
+                </div>
+            </div>
+            <button onclick="generateGrid()" class="w-full mt-6 py-6 bg-pink-600 rounded-3xl font-bold text-lg">GENERAR AUTOMÁTICO</button>
+        </div>
+
+        <!-- Animaciones -->
+        <div class="bg-zinc-900 rounded-3xl p-5 mb-6">
+            <div class="flex justify-between mb-4">
+                <span class="text-pink-400">ANIMACIONES</span>
+                <button onclick="addAnimation()" class="text-pink-400 text-xl leading-none">+</button>
+            </div>
+            <div id="animationsList" class="space-y-3"></div>
+        </div>
+
+        <!-- Frames -->
+        <div class="mb-6">
+            <div class="text-pink-400 text-sm mb-3">FRAMES</div>
+            <div id="framesContainer" class="grid grid-cols-3 gap-3 max-h-[380px] overflow-auto p-3 bg-black rounded-3xl border border-zinc-700"></div>
+        </div>
+
+        <!-- Preview -->
+        <div class="bg-black border-4 border-zinc-700 rounded-3xl p-6 mb-6 flex justify-center">
+            <canvas id="canvas" width="340" height="260" class="pixel rounded-2xl"></canvas>
+        </div>
+
+        <!-- XML -->
+        <div class="bg-zinc-900 rounded-3xl border border-zinc-700">
+            <div class="p-5 border-b border-zinc-700 flex justify-between bg-zinc-800 rounded-t-3xl">
+                <span class="text-emerald-400 font-bold">XML LISTO</span>
+                <div>
+                    <button onclick="copyXML()" class="mr-3 px-5 py-3 bg-zinc-700 rounded-2xl text-xs">COPIAR</button>
+                    <button onclick="exportXML()" class="px-7 py-3 bg-pink-600 rounded-2xl font-bold">DESCARGAR XML</button>
+                </div>
+            </div>
+            <pre id="xmlPreview" class="p-6 text-xs font-mono text-emerald-300 h-64 overflow-auto"></pre>
+        </div>
     </div>
-    <canvas id="canvas"></canvas>
-    <a id="downloadLink" style="display:none">Descargar XML</a>
 
     <script>
-        async function generar() {
-            const files = Array.from(document.getElementById('fileInput').files).sort();
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            const animName = document.getElementById('animName').value;
-            
-            let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n<TextureAtlas imagePath="sprites.png">\n';
-            let x = 0, y = 0, maxHeight = 0;
-            const images = [];
+        let spritesheet = null;
+        let frameWidth = 0, frameHeight = 0;
+        let frameData = [];
+        let animations = [];
+        let selectedFrame = -1;
 
-            // Cargar imágenes
-            for (let file of files) {
-                const img = await createImageBitmap(file);
-                images.push({img, name: file.name.split('.')[0]});
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        document.getElementById('upload').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                spritesheet = new Image();
+                spritesheet.onload = () => {};
+                spritesheet.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function generateGrid() {
+            if (!spritesheet) return alert("Sube tu spritesheet primero");
+
+            const cols = parseInt(document.getElementById('cols').value) || 4;
+            const rows = parseInt(document.getElementById('rows').value) || 8;
+
+            frameWidth = Math.floor(spritesheet.width / cols);
+            frameHeight = Math.floor(spritesheet.height / rows);
+
+            frameData = [];
+            let index = 0;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    frameData.push({
+                        index,
+                        name: `frame${index.toString().padStart(4, '0')}`,
+                        x: c * frameWidth,
+                        y: r * frameHeight,
+                        row: r
+                    });
+                    index++;
+                }
             }
 
-            // Calcular layout simple (fila)
-            canvas.width = 2048; // Ancho máximo seguro
-            canvas.height = 2048; 
-            
-            for (let item of images) {
-                ctx.drawImage(item.img, x, y);
-                xmlContent += `\t<SubTexture name="${item.name}0000" x="${x}" y="${y}" width="${item.img.width}" height="${item.img.height}"/>\n`;
-                x += item.img.width;
-                maxHeight = Math.max(maxHeight, item.img.height);
-            }
-            xmlContent += '</TextureAtlas>';
+            renderFrames();
+            updateXML();
+        }
 
-            // Descarga
-            const blob = new Blob([xmlContent], {type: 'text/xml'});
-            const link = document.getElementById('downloadLink');
-            link.href = URL.createObjectURL(blob);
-            link.download = animName + ".xml";
-            link.style.display = 'block';
-            link.innerText = "¡XML Generado! Click aquí para descargar";
+        function renderFrames() {
+            const container = document.getElementById('framesContainer');
+            container.innerHTML = '';
+
+            frameData.forEach((f, i) => {
+                const div = document.createElement('div');
+                div.className = `frame border-2 border-zinc-700 bg-zinc-900 rounded-2xl p-3 text-center cursor-pointer`;
+                if (i === selectedFrame) div.classList.add('selected');
+                
+                div.innerHTML = `
+                    <div class="text-[10px] text-zinc-400">F${f.index}</div>
+                    <div class="text-pink-300 text-xs mt-1 break-all">${f.name}</div>
+                `;
+                div.onclick = () => { selectedFrame = i; renderFrames(); previewFrame(i); };
+                container.appendChild(div);
+            });
+        }
+
+        function previewFrame(i) {
+            if (!spritesheet || i < 0) return;
+            const f = frameData[i];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const scale = Math.min(320 / frameWidth, 240 / frameHeight);
+            ctx.drawImage(spritesheet, f.x, f.y, frameWidth, frameHeight,
+                (canvas.width - frameWidth*scale)/2, (canvas.height - frameHeight*scale)/2,
+                frameWidth*scale, frameHeight*scale);
+        }
+
+        function addAnimation() {
+            const name = prompt("Nombre de la animación (idle, left, down, etc):", "idle");
+            if (!name) return;
+
+            const start = parseInt(prompt("Frame inicial:", "0")) || 0;
+            const length = parseInt(prompt("Cantidad de frames:", "4")) || 4;
+
+            // Aplicar nombres automáticamente
+            for (let i = 0; i < length; i++) {
+                const idx = start + i;
+                if (idx < frameData.length) {
+                    frameData[idx].name = `${name}${i.toString().padStart(4, '0')}`;
+                }
+            }
+
+            renderFrames();
+            updateXML();
+        }
+
+        function generateXML() {
+            let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<TextureAtlas imagePath="spritesheet.png">\n`;
+
+            frameData.forEach(f => {
+                xml += `  <SubTexture name="${f.name}" x="${f.x}" y="${f.y}" width="${frameWidth}" height="${frameHeight}" frameX="0" frameY="0" frameWidth="${frameWidth}" frameHeight="${frameHeight}"/>\n`;
+            });
+
+            xml += '</TextureAtlas>';
+            return xml;
+        }
+
+        function updateXML() {
+            document.getElementById('xmlPreview').textContent = generateXML();
+        }
+
+        function exportXML() {
+            const xml = generateXML();
+            if (!xml) return;
+            const blob = new Blob([xml], {type: 'text/xml'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'spritesheet.xml';
+            a.click();
+        }
+
+        function copyXML() {
+            navigator.clipboard.writeText(generateXML()).then(() => alert("✅ XML Copiado"));
         }
     </script>
 </body>
